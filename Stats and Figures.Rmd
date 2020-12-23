@@ -1,0 +1,968 @@
+---
+title: "Stats and Figures"
+author: "Vanessa Clark"
+date: "29/07/2020"
+output: html_document
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+---
+
+#Libraries
+```{r include=FALSE}
+#Statistics
+library(brms)           #Bayesian regression models 
+library(broom)          #Takes messy outputs of built-in R function band turns them into tidy data frames
+library(car)            #"Companion to applied regresion"
+library(dplyr)          #For working with data frame like objects
+library(emmeans)        #To do calculations for matrix, use after fitting models to explore models more and for predictions
+library(ggeffects)      #Compute marginal effects from statistical models and returns the result as tidy data frames, "ggemmeans", "ggeffect"
+library(lme4)           #Also for mixed effects models
+library(lubridate)      #Simplification working with dates and times
+library(MASS)           #"stepAIC" - Modern Applied Statistics with S
+library(mgcv)           #Mixed GAM (generalised additive models)
+library(mnormt)         #Multivariate, normal and t distributions
+library(multcomp)       #Test and confidence intervals for general linear hypotheses and parametric models
+library(MuMIn)          #"r.squaredGLMM" Tools for performing model selection and model averaging
+library(nlme)           #for linear and non-linear mixed effects models
+library(psych)          #Basic descriptive stats + multivariate and scale construction using factor analysis
+library(rlang)          #A toolbox for working with base types, core R features like the condition system, and core 'Tidyverse' features like tidy evaluation.
+library(Rmisc)          #Data Analysis and utility operations
+library(sjlabelled)     #Working with labelled data - can move from SPSS, statisica etc. 
+library(sjmisc)         #Data Transformation functions
+library(sjstats)        #Linear models, or linear mixed effects models not in base r
+library(survival)       #Survival analysis, Surv objects, Kaplan-Meier, and Alan-johansen curves
+library(tidybayes)      #tidy data and geoms for bayesion models
+library(tidyr)          #Data tidying ("spread", and "gather" primary functions)
+
+
+#Graphics
+library(cowplot)        #Creating figures "plot_grid"
+library(DHARMa)         #Create simulation based residuals for fitted linear mixed models "plotResiduals 
+library(effects)        #Effect displays for linear and generalized linear, and other models
+library(egg)            #Arranging multiple plots
+library(ggfortify)      #Data Visualization Tools for Statistical Analysis Results
+library(ggplot2)        #Creating data visualisation
+library(ggpubr)         #ggarrange, "Publication ready plots" based off ggplot figures
+library(grid)           #Graphics layout
+library(gridExtra)      #To work with "grid" graphics, to arrange multiple grid-based plots on a page, and draw tables
+library(jtools)         #Tools for plotting regression analysis, works with "survey" package
+library(lattice)        #Data visualisation
+library(RColorBrewer)   #colour palettes for graphics
+library(scales)         #Help scales and other functions like maps and others
+library(sjPlot)         #data visualisation
+library(survminer)      #survival curves using ggplot2
+library(tidyverse)      #Collection of packages such as ggplot, dplyr, tidyr
+library(vcd)            #visualising categorical data
+
+
+```
+#Functions
+
+##Model diagnostics
+```{r}
+
+#Combined model diagnostics
+
+Model.Diagnostics <- function(model1, anovatype=2){
+      S.Results <- summary(model1)
+      A.Results <- Anova(model1, type = anovatype)
+      RS.Results <- r.squaredGLMM(model1)
+      
+      plot1 <- plot(model1) #Creates diagnostic plots
+      plot2 <- plot(allEffects(model1,partial.resid=TRUE)) #creates plots of model effects
+      #QQPlot <- qqnorm(model1, abline = c(0,1))
+
+      return.list <- list("Summary", S.Results,
+                          "ANOVA", A.Results,
+                          "R Squared", RS.Results,
+                          plot1,
+                          plot2 
+                         # QQPlot
+      )
+        
+      print(return.list)
+}
+
+```
+
+##Barplots
+```{r}
+
+##Create bar plots based on single in interactive effect
+BarPlots <- function(isSingleEffect, Model, PredictorVar, Ylabel="", Xlabel="") {
+  
+  dodge <- position_dodge(width=0.9) #For error bar positioning
+
+#For bar graphs with a single effect (ie. no interactive effect)
+  if (isSingleEffect){
+    
+data1 <- as.data.frame (effect(PredictorVar, Model)) #pulls data provided to function into dataframe for east of putting into model
+
+#standard ggplot
+dataplot <- (ggplot(data1, aes(x = data1[[1]], 
+                                       y = data1[[2]]))
+                        + theme_bw() 
+                        + theme(
+                                  panel.grid.major=element_blank(), #no grid lines
+                                  panel.grid.minor=element_blank(), #no grid lines
+                                  axis.line = element_line(colour = "black"), 
+                                  panel.border=element_rect(colour = "black", fill=NA), #Add border to entire figure
+                                  #set text sizes for all axis title + text
+                                  axis.text.x = element_text(size = 12), 
+                                  axis.title.x = element_text(size = 12),
+                                  axis.title.y = element_text(size = 12),
+                                  axis.text.y = element_text(size = 12),
+                                  )
+             #Error Bars as 95% confidence interval
+                        + geom_bar(stat='identity', position=position_dodge(width=0.9))
+                        + geom_errorbar(aes(ymax = data1[[2]] + (1.96*data1[[3]]), 
+                                            ymin=data1[[2]] - (1.96*data1[[3]])), 
+                                            position = dodge, width=0.25
+                                        )
+             #Axis labels as provided in function
+                            + ylab(Ylabel)
+                            + xlab(Xlabel)
+                            + scale_fill_grey()
+                              )
+return(dataplot)
+
+  }
+  #For bar graphs with multiple predictors (ie. interactive effect)
+  else {
+    
+data2 <- as.data.frame(effect(PredictorVar, Model)) #pulls data provided to function into dataframe for east of putting into model
+
+#standard ggplot
+dataplot2 <- (ggplot(data2, aes(x = data2[[2]], 
+                                       y = data2[[3]], 
+                                       fill = data2[[1]]))
+                        + theme_bw() 
+                        +  theme(
+                                  panel.grid.major=element_blank(), #no grid lines
+                                  panel.grid.minor=element_blank(), #no grid lines
+                                  axis.line = element_line(colour = "black"),
+                                  panel.border=element_rect(colour = "black", fill=NA),
+                                  #set text sizes for all axis titles + text 
+                                  axis.text.x = element_text(size = 12), 
+                                  axis.title.x = element_text(size = 12),
+                                  axis.title.y = element_text(size = 12),
+                                  axis.text.y = element_text(size = 12),
+                                  #Legend settings, puts in upper right corner
+                                  legend.position = c(.9,.8), 
+                                  legend.box.background = element_rect(colour = "black", size = 1), 
+                                  legend.text = element_text(size = 12), 
+                                  legend.title = element_text(size = 12), 
+                                  legend.key.size = unit(.5,"line")
+                                  )
+              #Error bars
+                        + geom_bar(stat='identity', position=position_dodge(width=0.9))
+                        + geom_errorbar(aes(ymax = data2[[3]] + (1.96*data2[[4]]), 
+                                            ymin=data2[[3]] - (1.96*data2[[4]])), 
+                                            position = dodge, width=0.25
+                                        )
+              #Axis labels as provided in function
+                        + labs(fill = data2[[1]]) 
+                        + ylab(Ylabel)
+                        + xlab(Xlabel) 
+                        + scale_fill_grey() 
+                              )
+
+return(dataplot2)
+}
+
+}
+```
+##EnvSummary
+```{r}
+##Summarise Environmental data
+EnvironmentalSummary <- function(EnvFile, Locations, StartTime = 0, EndTime = 24, FileName = "File.csv"){
+  #Transform time data into single time format
+  EnvFile = EnvFile %>% mutate(NewTime = as.POSIXct(Time, format='%H:%M:%S'),
+                                NewTime2 = as.numeric(paste0(format(NewTime, '%H'), '.', format(NewTime, '%M'))))
+  #Transform date to date class variable
+  EnvFile$Date = as.Date(EnvFile$Date, format = "%d/%m/%y")
+  
+  #Filter data between start and end time provided in function, then group entries based on Date
+  EnvFile = EnvFile %>% filter(between(NewTime2, StartTime, EndTime)) %>%  dplyr::group_by(Date) %>% 
+  #Summarise data for each location provided by below functions
+  summarise_at(vars(unlist(Locations)), 
+               funs(mean, 
+                    min, 
+                    max, 
+                    quantile(., probs = 0.25),
+                    quantile(., probs = 0.75),
+                    IQR
+                    )
+               )
+ #Create list to add results of for loop into
+ DataList <- list()
+ 
+ #for each location provided in function "Locations" list create new data frame with date, mean, quantile 1 & 3, and create new column with location ID
+ for(Location in Locations){
+  Loc_mean <- (paste(Location, 'mean', sep='_'))
+  Loc_q1 <- (paste(Location, "quantile..4", sep= '_'))
+  Loc_q3 <- (paste(Location, "quantile..5", sep= '_'))
+  InterQR <- (paste(Location, "IQR", sep = '_'))
+  Loc <- (paste(Location))
+  LocationName <- (paste(Location, "NewFile", sep = "_" ))
+  
+  LocationName = tibble(Date = EnvFile$Date, 
+                        Mean = EnvFile[[Loc_mean]], 
+                        Quantile1 = EnvFile[[Loc_q1]],
+                        Quantile3 = EnvFile[[Loc_q3]],
+                        InterQR = EnvFile[[InterQR]]
+                        ) %>%
+    add_column(Location = as.character(Loc), .after = "Date")
+  
+  #Add new data frame(tibble) into previously created DataList
+  DataList[[Location]] <- LocationName
+ }
+ 
+ #join together rows in DataList of same name creating single dataframe with each location included 
+  EnvSummForStats = bind_rows(list(DataList[[1]], DataList[[2]]))
+ 
+  assign("EnvDataStats", EnvSummForStats, envir = .GlobalEnv) #add Dataframe with mean, Q1 & Q3 for each location provided into global environment 
+  assign("EnvDataSummary", EnvFile, envir = .GlobalEnv) #Add summary statistics data frame (separate for each location) into global environment
+  
+  write.csv(EnvFile, file = FileName) #if file name provided in function write Summary statistic into .csv file
+}
+```
+
+##DW Plots
+```{r}
+
+##Dot and whisker plots
+DWPlots <- function(Model, Predictors, YLimit = c(0,100), YLabel = "", XLabel = ""){
+ ( plot_model(Model, 
+             terms = Predictors, 
+             type = "eff",
+             ci.lvl = 0.95, 
+             title = "", 
+             dodge = 1, 
+             axis.textsize = 12)
+  + ylim(YLimit)
+  + labs(y= YLabel, x= XLabel)
+ )
+}
+
+```
+
+
+
+#Data input
+```{r}
+
+RTData <- (na.omit(read.csv('Data RT.csv', header=TRUE,))) #Growth measurement data
+InitialData <- (na.omit(read.csv('Initial Data.csv', header=TRUE,))) #Initial volume data
+Mortality <- (na.omit(read.csv('MortalityData.csv', header=TRUE,))) #Mortality data
+FieldPAR <- (na.omit(read.csv('PARHOURLY.csv', header=TRUE,))) #Hourly PAR data
+FieldTemp <- (na.omit(read.csv('TEMPHOURLY.csv', header=TRUE,)))#Hourly tempdata
+
+
+#Change Origin and Transplant to Factor and relevel 
+RTData$Origin <- as.factor(RTData$Origin)
+RTData$Transplant <- as.factor(RTData$Transplant)
+#RTData$Transplant <- relevel(RTData$Transplant, ref = "Shallow")
+str(RTData)
+
+#Set global theme for plot_model  
+set_theme(base = theme_bw(), 
+          axis.linecolor = "black",
+          panel.gridcol = "white"
+)
+
+
+```
+
+#Initial Bulk Volume
+```{r}
+
+#Model
+InitialVol <- lm(Bulk.Volume ~ Initial.Location, data=InitialData)
+
+Model.Diagnostics(InitialVol, 2)
+#Initial Volume differed significantly between origin location, it was higher on the reef slope
+
+```
+##Plot
+```{r}
+set_theme(base = theme_bw(), 
+          axis.linecolor = "black",
+          panel.gridcol = "white"
+          
+)
+
+volplotplot <-  (plot_model(InitialVol, 
+                            type = "pred", 
+                            terms = c("Initial.Location[Flat,Slope]"), 
+                            show.ci = TRUE,
+                            ci.lvl = 0.95,
+                            title=" ",
+                            dodge = 1,
+                            axis.lim= c(2,6),
+                            dot.size = 2,
+                            line.size = 1,
+                            show.data = TRUE,
+                            axis.textsize = 12
+) 
++ labs(y="Initial Bulk Volume (ml)",x="Origin")
++ geom_point(colour = "red")
+
+)
+
+volplotplot
+
+```
+
+
+
+
+#Mortality 
+##Stats
+```{r}
+Mortglmer <- glmer(StatusE ~ Origin*Transplant +(1|Rock), data=Mortality, family='binomial') #Laplacian approximation
+Mortglmer1 <- glmer(StatusE ~ Origin+Transplant +(1|Rock), data=Mortality, family='binomial') #Laplacian approximation
+Mortglmer2 <- glmer(StatusE ~ Origin +(1|Rock), data=Mortality, family='binomial') #Laplacian approximation
+
+
+AIC(Mortglmer,Mortglmer1,Mortglmer2) #Chek whether differences are significant 
+
+Model.Diagnostics(Mortglmer2)
+odds_to_rr(Mortglmer1) #RR (Rish Ratio is 0.86 - 0.86-1 = .14 so 14% less likely )
+
+dat.sim<- simulateResiduals(Mortglmer2)
+plot(dat.sim)
+#want p values to be greater than 0.05)
+
+
+```
+##Plot
+```{r}
+set_theme(
+  base=theme_classic(),
+  axis.title.size=1,
+  axis.textsize = 1#,
+  #legend.size =.7,
+  #legend.title.size = 3,
+  #geom.label.size = 5
+)
+
+set_theme(base = theme_bw(),
+          axis.linecolor = "black",
+          panel.gridcol = "white"
+          
+)
+
+
+MortPlot <- (plot_model(Mortglmer2, 
+                        type = "re", 
+                        terms = c("Origin[Flat,Slope]"), 
+                        title=" ",
+                        dodge = 1,
+                        axis.textsize = 12
+) 
++ labs(y="Probability of Mortality",x="Origin")
+
+)
+
+MortPlot
+
+
+BarPlots(isSingleEffect = TRUE, Model = Mortglmer2, PredictorVar = "Origin")
+
+summary(Mortglmer2)
+summary(Mortality)
+
+model1 <- lm(data = Mortality, StatusE ~ Origin * Transplant)
+
+stepAIC(model1)
+
+summary(model1)
+
+
+
+```
+
+
+
+#Environmental Data
+##PAR Stats
+```{r}
+EnvironmentalSummary(FieldPAR, Locations = list("RSPAR2h", "RFPAR2H"), StartTime = 6, EndTime = 18)
+
+PARStatsData <- as.data.frame(EnvDataStats)
+PARStatsData
+PARStatsData$Date <- as.factor(PARStatsData$Date)
+PARStatsData$Date <- as.numeric(PARStatsData$Date)
+
+PARFigureData <- EnvDataSummary
+
+
+MeanPARLM <- lm(Mean ~ Date * Location, data = PARStatsData, na.action = "na.omit") #Best Model
+
+stepAIC(MeanPARLM)
+
+Model.Diagnostics(MeanPARLM, anovatype = 3)
+
+
+
+VarPARLM <- lm(InterQR ~ Date * Location, data = PARStatsData, na.action = "na.omit")
+
+stepAIC(VarPARLM)
+
+Model.Diagnostics(VarPARLM, anovatype = 3)
+
+
+
+```
+
+##PAR Figure
+```{r}
+PARPlot <- (ggplot(PARFigureData, aes(x=as.Date(Date), group =1)) 
+            #+ geom_point(aes(y=RS.PAR.D.mean), color = "blue") 
+            + geom_line(aes(y=RSPAR2h_mean), color = "blue", group =1, size=1) 
+            + geom_ribbon(aes(ymin = RSPAR2h_quantile..4,
+                              ymax = RSPAR2h_quantile..5),
+                          fill = "royal blue 2", alpha = 0.3, na.rm=TRUE)
+            
+            # + geom_point(aes(y=RF.PAR.D.mean), color = "red") 
+            + geom_line(aes(y=RFPAR2H_mean), color = "red", group =1, size =1) 
+            + geom_ribbon(aes(ymin = RFPAR2H_quantile..4,
+                              ymax = RFPAR2H_quantile..5),
+                          fill = "tomato 2", alpha = 0.3, na.rm=TRUE)
+            
+            + ylab(expression("PAR (μmol m"^"−2"*"s"^"−1"*")")) 
+            + xlab("Date") 
+            + theme_bw() 
+            + theme(
+              panel.grid.major = element_blank(), 
+              panel.grid.minor = element_blank(), 
+              axis.line = element_line(colour = "black"), 
+              axis.text.x = element_text(angle = 90, hjust = 1, size =10),
+              axis.text.y = element_text(size=12),
+              axis.title.y = element_text(size = 12),
+              axis.title.x = element_text(size = 12)
+            ) 
+            + scale_x_date(date_breaks = "6 days", 
+                           limits = as.Date(c('2017-10-06','2018-02-19')))
+            + scale_y_continuous(breaks=round(seq(min(0), max(1750), by = 250)), 
+                                 limits = c(0,1750))
+            
+)
+
+PARPlot
+```
+
+##Temp Stats
+```{r echo=FALSE}
+EnvironmentalSummary(FieldTemp, Locations = list("RSTempH", "RFTempH"), StartTime = 0, EndTime = 24)
+
+TempStatsData <- as.data.frame(EnvDataStats)
+TempStatsData$Date <- as.factor(TempStatsData$Date)
+TempStatsData$Date <- as.numeric(TempStatsData$Date)
+
+TempFigureData <- EnvDataSummary
+
+
+MeanTempLM <- lm(Mean ~ Date * Location, data = TempStatsData, na.action = "na.omit") 
+BestMeanTempLM <- lm(Mean ~ Date + Location, data = TempStatsData, na.action = "na.omit") #Best Model
+
+stepAIC(MeanTempLM)
+
+Model.Diagnostics(BestMeanTempLM, anovatype = 2)
+
+
+
+VarTempLM <- lm(InterQR ~ Date * Location, data = TempStatsData, na.action = "na.omit")
+
+stepAIC(VarTempLM)
+
+Model.Diagnostics(VarTempLM, anovatype = 3)
+
+plot_model(VarTempLM, 
+           type = "eff")
+
+
+```
+
+##Temp Figure
+```{r}
+DHWValues <- (na.omit(read.csv('DHW Values.csv', header=TRUE,)))
+
+
+TempFigureData %>% add_column(DHWValues$DHW)
+
+```
+
+
+
+```{r}
+TempPlot <- (ggplot(TempFigureData, aes(x=as.Date(Date), group =1)) 
+             
+             #DHW data 
+             + geom_line(aes(y=DHWValues$DHW +20), colour = "grey20", group = 1, size = 1, alpha = 0.3)
+             + geom_ribbon(aes(ymax = DHWValues$DHW + 20, 
+                               ymin = 20), 
+                           fill = "grey20", alpha = 0.3)
+             #Reef flat values
+             # + geom_point(aes(y=RF.TEMP.mean), color = "red") 
+             + geom_line(aes(y=RFTempH_mean), color = "red", group =1, size =1) 
+             + geom_ribbon(aes(ymin = RFTempH_quantile..4,
+                               ymax = RFTempH_quantile..5),
+                           fill = "tomato 2", alpha = 0.5, na.rm=TRUE)
+             #Reef slope values
+             #+ geom_point(aes(y=RS.TEMP.mean), color = "blue") 
+             + geom_line(aes(y=RSTempH_mean), color = "blue", group =1, size=1) 
+             + geom_ribbon(aes(ymin = RSTempH_quantile..4,
+                               ymax = RSTempH_quantile..5),
+                           fill = "royal blue 2", alpha = 0.5, na.rm=TRUE)
+             
+             
+             + ylab(expression("Temperature (°C)")) 
+             + xlab("Date") 
+             + theme_bw() 
+             + theme(
+               panel.grid.major = element_blank(), 
+               panel.grid.minor = element_blank(), 
+               axis.line = element_line(colour = "black"), 
+               axis.text.y = element_text(size=12),
+               axis.title.y = element_text(size = 12, vjust = 2),
+               axis.text.x = element_text(size = 12, angle = 90, hjust = 1),
+               axis.title.x = element_text(size = 12)
+             ) 
+             + scale_x_date(date_breaks = "6 days", 
+                            limits = as.Date(c('2017-10-06','2018-02-19')))
+             #  + scale_y_continuous(breaks=round(seq(min(20), max(32), by = 2)),
+             # limits = c(20,32))
+             + scale_y_continuous(DHWValues$DHW, name = "Temperature (°C)", 
+                                  sec.axis = sec_axis(~.-20, name = "DHW (°C Week)"),
+                                  breaks=round(seq(min(20), max(32), by = 2)),
+                                  limits = c(20,32))
+             + geom_hline(yintercept = 28.3, linetype = "dashed", size = 1)
+             
+)
+
+
+TempPlot
+```
+
+
+
+
+#Bulk Volume ~ Origin*Transplant
+##Stats
+```{r}
+#The Linear mixed effects model includes "rock" as a random factor.
+VolLME <- lme(Pct.Volume ~ Origin  * Transplant, 
+              random=~1|Rock, data=RTData, method="ML", na.action = na.exclude)
+
+#Model selection stepAIC
+stepAIC(VolLME)
+
+#take forumula for best fit model, and rerun lme, with these predictors and relationships, but this time use method = "REML"
+#eg. IF only location remains, 
+VolLME.auto <- lme(Pct.Volume ~ Origin + Transplant, 
+                   random=~1|Rock, data=RTData, method="REML", na.action = na.exclude)
+#reason is that cannot use stepAIC using REML. See BIOL3023 manual
+
+#model diagnostics
+Model.Diagnostics(VolLME.auto, 2)
+qqnorm(VolLME.auto, abline = c(0,1))
+
+#fixed effects account for 37% of variance, random effects an additional 7%
+#Corals moved to the shallows increase volume more than those moved to the deep, but reef-flat corals increase volume less than reef slope corals
+
+```
+
+##Plots
+```{r}
+#Origin Bar Plot
+VolumeOriginPlot <- BarPlots(TRUE, VolLME.auto, "Origin",
+                             Ylabel = "Bulk Volume (ml)",
+                             Xlabel = "Origin Location")
+#Transplant Bar Plot
+VolumeTransplantPlot <- BarPlots(TRUE, VolLME.auto, "Transplant", 
+                                 Ylabel = "%\U0394 Bulk Volume (ml)",
+                                 Xlabel = "Transplant Locations")
+
+
+
+#Transplant dot and whisker plot
+VolumeTransplantPlot2 <- DWPlots(VolLME.auto, "Transplant", 
+                                 YLimit = c(20,100), 
+                                 YLabel = "%\U0394 Bulk Volume (ml/ml)", 
+                                 XLabel = "Transplant Locations"
+)
+
+#Origin dot and whisker plot
+VolumeOriginPlot2 <- DWPlots(VolLME.auto, "Origin", 
+                             YLimit = c(20,100), 
+                             YLabel = "%\U0394 Bulk Volume (ml/ml)", 
+                             XLabel = "Origin Locations"
+)
+
+print(list(VolumeOriginPlot, VolumeOriginPlot2, 
+           VolumeTransplantPlot, VolumeTransplantPlot2))
+
+
+
+
+```
+
+
+#Surface Area 
+##Stats
+```{r}
+SALME <- lme(Pct.SA ~ Origin * Transplant + Pct.Volume, 
+             random=~1|Rock, data=RTData, method="ML", na.action = na.exclude)
+
+#Model selection stepAIC
+stepAIC(SALME)
+
+#take forumula for best fit model, and rerun lme, with these predictors and relationships, but this time use method = "REML"
+#eg. IF only location remains, 
+SALME.auto <- lme(Pct.SA ~ Origin + Transplant + Pct.Volume, 
+                  random=~1|Rock, weights = varIdent(form = ~1 | Origin * Transplant), data=RTData, method="REML", na.action = na.exclude)
+#reason is that cannot use stepAIC using REML. See BIOL3023 manual
+
+#fixed effects account for 77% of variance, random effects an additional 0%
+
+#model diagnostics
+Model.Diagnostics(SALME.auto, 2)
+qqnorm(SALME.auto, abline = c(0,1))
+
+# increase tissue for fixed increase in  branch volume  (living SA to Volume) is less for corals placed on reef slope, but greater for corals originating from reef slope
+
+```
+
+##Plots
+```{r}
+
+#Origin bar plot
+SAOriginPlot <- BarPlots(TRUE, SALME.auto, "Origin", 
+                         Ylabel = "% Living Surface Area", 
+                         Xlabel = "Origin Location"
+)
+
+
+#Origin dot and whisker plot
+SAOriginPlot2 <- DWPlots(SALME.auto, "Origin", YLimit = c(40,80), 
+                         YLabel = expression("%\U0394 LSA (cm"^"2"*"/cm"^"2"*")"), 
+                         XLabel = "Origin Locations"
+)
+
+#Transplant bar plot
+SATransplantPlot <- BarPlots(TRUE, SALME.auto, "Transplant", 
+                             Ylabel = expression("%\U0394 LSA (cm"^"2"*"/cm"^"2"*")"), 
+                             Xlabel = "Transplant Locations"
+)
+
+#Transplant dot and whisker plot
+SATransplantPlot2 <- DWPlots(SALME.auto, "Transplant", YLimit = c(40,80), 
+                             YLabel = expression(bold("%\U0394 LSA (cm"^"2"*"/cm"^"2"*")")), 
+                             XLabel = "Transplant Locations"
+)
+
+print(list(SAOriginPlot, SAOriginPlot2, 
+           SATransplantPlot, SATransplantPlot2))
+
+
+
+
+
+
+
+```
+#Buoyant Weight
+##Stats
+```{r}
+
+BWvolLME <- lme(Pct.BW ~ Origin * Transplant+ Pct.Volume + Pct.SA, 
+                random=~1|Rock, data=RTData, method="ML", na.action = na.exclude)
+
+
+#Model selection stepAIC
+stepAIC(BWvolLME)
+
+#take forumula for best fit model, and rerun lme, with these predictors and relationships, but this time use method = "REML"
+#eg. IF only location remains, 
+CalvolLME.auto2 <- lme(Pct.BW ~ Origin * Transplant  + Pct.SA ,
+                       random=~1|Rock, weights = varIdent(form = ~1 | Origin * Transplant),data=RTData, method="REML", na.action = na.exclude)
+#reason is that cannot use stepAIC using REML. See BIOL3023 manual
+#Have added weights as improve assumption fit
+
+vif(CalvolLME.auto2) # OK if <5 as standard for collinearity, otherwise drop SA from model, get same effect
+
+#model diagnostics
+Model.Diagnostics(BWvolLME, 3)
+qqnorm(CalvolLME.auto2, abline = c(0,1))
+
+#Density increase of branch  (Calcification to Volume for same change in living tissue) is greater for reef flat corals returned to reef flat.
+
+```
+##Plots
+```{r}
+
+set_theme(base = theme_bw(), 
+          axis.linecolor = "black",
+          panel.gridcol = "white",
+          legend.inside = TRUE,
+          legend.pos = "top right",
+          legend.just = c(1.2,1.1),
+          legend.item.backcol = "white"
+)
+
+PCTcalplot <- (plot_model(CalvolLME.auto2, 
+                          type = "eff",
+                          terms = c("Origin", "Transplant"),
+                          ci.lvl = 0.95, 
+                          title = "", 
+                          dodge = c(.5), 
+                          axis.textsize = 12, 
+                          show.legend = TRUE,
+                          colors = c("blue","red")
+)
+               + ylim(80,140)
+               + labs(y="%\U0394 Buoyant Weight (g/g)",x="")
+               + theme(
+                 axis.text.x = element_blank(),
+                 axis.title.x = element_blank()
+               ))
+
+PCTcalplot
+
+```
+
+
+#Protein
+##Stats
+```{r}
+#The Linear mixed effects model includes "rock" as a random factor.
+ProteinLME <- lme(Pct.Protein ~ Origin * Transplant + Pct.BW + Pct.SA + Pct.Volume, 
+                  random=~1|Rock, data=RTData, method="ML", na.action = na.exclude)
+
+summary(ProteinLME) 
+
+#Model selection stepAIC
+ProteinLME.auto <-stepAIC(ProteinLME)
+
+# summaries:
+summary(ProteinLME.auto)
+#take forumula for best fit model, and rerun lme, with these predictors and relationships, but this time use method = "REML"
+#eg. IF only location remains, 
+ProteinLME.auto2 <- lme(Pct.Protein ~ Origin * Transplant + Pct.BW +Pct.SA + Pct.Volume,
+                        random=~1|Rock, weights = varIdent(form = ~1 | Origin * Transplant), data=RTData, method="REML", na.action = na.exclude)
+#reason is that cannot use stepAIC using REML. See BIOL3023 manual
+
+#model fit:
+r.squaredGLMM(ProteinLME.auto2)  #fixed effects account for 47% of variance, random effects an additional 0%
+
+
+
+plot(ProteinLME.auto2)
+
+qqnorm(ProteinLME.auto2, abline = c(0,1))
+summary(ProteinLME.auto2)
+Anova(ProteinLME.auto2, type = 3)
+plot(allEffects(ProteinLME.auto2,partial.resid=TRUE))
+lsmeans(ProteinLME.auto2,pairwise ~ Origin*Transplant,adjust="tukey") #Tukey post hoc test to determine levels of variance.
+
+emm.s <- emmeans(ProteinLME.auto2, c("Origin","Transplant"))
+pairs(emm.s)
+
+```
+
+
+
+##Plots
+```{r}
+
+# set_theme(base = theme_bw(),
+# axis.linecolor = "black",
+# panel.gridcol = "white"
+# )
+
+PCTprotplot <- (plot_model(ProteinLME.auto2, 
+                           type = "eff",
+                           terms = c("Origin", "Transplant"),
+                           ci.lvl = 0.95, 
+                           title = "", 
+                           dodge = .5, 
+                           axis.textsize = 12,
+                           show.legend = FALSE,
+                          colors = c("blue","red"))
+                + ylim(40,120)
+                + labs(y= expression(bold("%\U0394 Total Protein (mg/mg)"),x="Origin Locations"))
+)
+PCTprotplot
+
+
+```
+#Arrange and save figure 1
+```{r}
+
+TempPlot <- (TempPlot
+             + theme(
+               axis.text.x = element_blank(),
+               axis.title.x = element_blank()
+               
+             )
+)
+
+top1 <- ggpubr::ggarrange(TempPlot, PARPlot,
+                          align = "v",
+                          ncol = 1,
+                          heights = c(15,20),
+                          labels = c("c","d"), 
+                          label.x = .11,
+                          label.y = 0.96
+)
+
+bottom1 <- ggpubr::ggarrange(MortPlot, volplotplot,
+                             align = "h",
+                             ncol=2,
+                             labels = c(" a","b"), 
+                             label.x = c(.19, .12),
+                             label.y = 0.9
+)
+bottom1
+
+
+Figure1 <- cowplot::plot_grid(bottom1, top1,
+                              align = "vh",
+                              rel_heights = c(1,1.5),
+                              ncol = 1)
+
+Figure1
+
+
+
+
+ggsave("Figure1.png", 
+       plot = Figure1, 
+       path = "Figures", 
+       scale = 1, 
+       width = 8, 
+       height = 8, 
+       units = c("in", "cm", "mm"),
+       dpi = 1000)
+
+
+```
+
+
+#Arrange and Save Growth Panel graph 
+```{r}
+VolumeTransplantPlot2 <- (VolumeTransplantPlot2
+                          + theme(
+                            axis.title.y = element_text(face = "bold"),
+                            axis.text.x = element_blank(), 
+                            axis.title.x = element_blank(),
+                            panel.background = element_rect(fill="transparent"),
+                            plot.background = element_rect(fill = "transparent", colour = NA),
+                            panel.grid.major = element_blank(), # get rid of major grid
+                            panel.grid.minor = element_blank()
+                          )
+)
+
+VolumeOriginPlot2 <- (VolumeOriginPlot2
+                      + theme(
+                        axis.text.x = element_blank(), 
+                        axis.title = element_blank(),
+                            panel.background = element_rect(fill="transparent"),
+                            plot.background = element_rect(fill = "transparent", colour = NA),
+                            panel.grid.major = element_blank(), # get rid of major grid
+                            panel.grid.minor = element_blank()
+                      )
+)
+
+SAOriginPlot2 <- (SAOriginPlot2
+                      + theme(
+                        axis.title.x = element_text(face = "bold"),
+                        axis.title.y = element_blank(),
+                            panel.background = element_rect(fill="transparent"),
+                            plot.background = element_rect(fill = "transparent", colour = NA ),
+                            panel.grid.major = element_blank(), # get rid of major grid
+                            panel.grid.minor = element_blank()
+                      )
+)
+
+SATransplantPlot2 <- (SATransplantPlot2
+                      + theme(
+                            axis.title.y = element_text(face = "bold"),
+                            axis.title.x = element_text(face = "bold"),
+                            panel.background = element_rect(fill="transparent"),
+                            plot.background = element_rect(fill = "transparent", colour = NA),
+                            panel.grid.major = element_blank(), # get rid of major grid
+                            panel.grid.minor = element_blank()
+                      )
+)
+
+PCTcalplot <- (PCTcalplot
+                  + theme(
+                          axis.title.y = element_text(face = "bold"),
+                          panel.background = element_rect(fill = "transparent"), # bg of the panel
+                          plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+                          panel.grid.major = element_blank(), # get rid of major grid
+                          panel.grid.minor = element_blank(), # get rid of minor grid
+                          legend.background = element_rect(fill = "transparent", colour = NA), # get rid of legend bg
+                          legend.box.background = element_rect(fill = "transparent", colour = NA), 
+                          legend.key = element_rect(fill = "transparent", colour = NA)
+                  )
+
+)
+
+PCTprotplot <- (PCTprotplot
+                + theme(
+                  axis.title.y = element_text(face = "bold"),
+                  axis.title.x = element_text(face = "bold"),
+                            panel.background = element_rect(fill="transparent"),
+                            plot.background = element_rect(fill = "transparent", colour = NA),
+                            panel.grid.major = element_blank(), # get rid of major grid
+                            panel.grid.minor = element_blank()
+                      )
+)
+
+                      
+
+
+top2 <- ggpubr::ggarrange(VolumeTransplantPlot2, VolumeOriginPlot2, 
+                          SATransplantPlot2, SAOriginPlot2,
+                          align = "hv",
+                          labels = c("a","b"," c","d"),
+                          label.x = c(.3,.3,.28,.3),
+                          label.y = .86
+)
+
+
+bottom2 <- ggpubr::ggarrange(PCTcalplot, PCTprotplot, 
+                             heights = c(10,11.5),
+                             align = "v",
+                             ncol=1,
+                             labels = c("e"," f"),
+                             label.x = .15,
+                             label.y = .85
+)
+
+figure2 <- cowplot::plot_grid(top2, bottom2, 
+                                align = "hv",
+                                ncol = 1, 
+                                greedy = FALSE)
+
+figure2
+
+
+ggsave("Figure2.png",
+       plot = figure2,
+       path = "Figures",
+       scale = 1,
+       width = 5,
+       height = 12,
+       units = c("in", "cm", "mm"),
+       dpi = 1000, 
+       bg = "transparent")
+
+```
