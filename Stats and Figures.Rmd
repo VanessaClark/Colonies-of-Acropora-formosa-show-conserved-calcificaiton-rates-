@@ -183,7 +183,7 @@ EnvironmentalSummary <- function(EnvFile, Locations, StartTime = 0, EndTime = 24
   EnvFile = EnvFile %>% mutate(NewTime = as.POSIXct(Time, format='%H:%M:%S'),
                                 NewTime2 = as.numeric(paste0(format(NewTime, '%H'), '.', format(NewTime, '%M'))))
   #Transform date to date class variable
-  EnvFile$Date = as.Date(EnvFile$Date, format = "%d/%m/%y")
+  EnvFile$Date = as.Date(EnvFile$Date, format = "%d/%m/%Y")
   
   #Filter data between start and end time provided in function, then group entries based on Date
   EnvFile = EnvFile %>% filter(between(NewTime2, StartTime, EndTime)) %>%  dplyr::group_by(Date) %>% 
@@ -254,6 +254,11 @@ DWPlots <- function(Model, Predictors, YLimit = c(0,100), YLabel = "", XLabel = 
 
 #Data input
 ```{r}
+#Sophie's Data
+#RTData <- (na.omit(read.csv("/Users/sophie/Desktop/people/Vanessa/Data RT.csv")))
+#Envdata <- (na.omit(read.csv("/Users/sophie/Desktop/people/Vanessa/Compiled Field Data.csv")))
+#InitialData <- (na.omit(read.csv("/Users/sophie/Desktop/people/Vanessa/Initial Data.csv")))
+#Mortality <- (na.omit(read.csv("/Users/sophie/Desktop/people/Vanessa/MortalityData.csv")))
 
 RTData <- (na.omit(read.csv('Data RT.csv', header=TRUE,))) #Growth measurement data
 InitialData <- (na.omit(read.csv('Initial Data.csv', header=TRUE,))) #Initial volume data
@@ -273,6 +278,9 @@ set_theme(base = theme_bw(),
           axis.linecolor = "black",
           panel.gridcol = "white"
 )
+
+
+
 
 
 ```
@@ -318,6 +326,17 @@ volplotplot
 ```
 
 
+#Initial Lipids
+```{r}
+
+#Model
+InitialVol <- lm(Lipids ~ Initial.Location, data=InitialData)
+
+Model.Diagnostics(InitialVol, 2)
+#Initial Volume differed significantly between origin location, it was higher on the reef slope
+
+```
+
 
 
 #Mortality 
@@ -326,14 +345,15 @@ volplotplot
 Mortglmer <- glmer(StatusE ~ Origin*Transplant +(1|Rock), data=Mortality, family='binomial') #Laplacian approximation
 Mortglmer1 <- glmer(StatusE ~ Origin+Transplant +(1|Rock), data=Mortality, family='binomial') #Laplacian approximation
 Mortglmer2 <- glmer(StatusE ~ Origin +(1|Rock), data=Mortality, family='binomial') #Laplacian approximation
+Mortglmer3 <- glmer(StatusE ~ Transplant +(1|Rock), data=Mortality, family='binomial')
 
 
-AIC(Mortglmer,Mortglmer1,Mortglmer2) #Chek whether differences are significant 
+AIC(Mortglmer,Mortglmer1,Mortglmer2, Mortglmer3) #Chek whether differences are significant 
 
-Model.Diagnostics(Mortglmer2)
-odds_to_rr(Mortglmer1) #RR (Rish Ratio is 0.86 - 0.86-1 = .14 so 14% less likely )
+Model.Diagnostics(Mortglmer1)
+#odds_to_rr(Mortglmer1) #RR (Rish Ratio is 0.86 - 0.86-1 = .14 so 14% less likely )
 
-dat.sim<- simulateResiduals(Mortglmer2)
+dat.sim<- simulateResiduals(Mortglmer1)
 plot(dat.sim)
 #want p values to be greater than 0.05)
 
@@ -355,6 +375,17 @@ set_theme(base = theme_bw(),
           panel.gridcol = "white"
           
 )
+
+MortPlot <- (plot_model(Mortglmer3, 
+                        type = "eff", 
+                        terms = c("Transplant"), 
+                        dodge = 1,
+                        title = " ",
+                        )
+             +labs(y = "Probability of Survival", x = "Origin")
+             )
+
+
 
 
 MortPlot <- (plot_model(Mortglmer2, 
@@ -382,7 +413,52 @@ stepAIC(model1)
 
 summary(model1)
 
+library(glmmTMB)
 
+set_theme(
+  base=theme_classic(),
+  axis.title.size=1.7,
+  axis.textsize = 1.1#,
+  #legend.size =.7,
+  #legend.title.size = 3,
+  #geom.label.size = 5
+)
+
+set_theme(base = theme_bw(), 
+          axis.linecolor = "black",
+          panel.gridcol = "white"
+          
+)
+
+volplotplot <-  (plot_model(InitialVol, 
+                            type = "pred", 
+                            terms = c("Initial.Location[Flat,Slope]"), 
+                            show.ci = TRUE,
+                            ci.lvl = 0.95,
+                            title=" ",
+                            dodge = 1,
+                            axis.lim= c(2,6),
+                            dot.size = 2,
+                            line.size = 1,
+                            show.data = TRUE,
+                            axis.textsize = 12
+) 
++ labs(y="Initial Bulk Volume (ml)",x="Origin")
++ geom_point(colour = "red"))
+
+
+
+MortPlot<-plot_model(Mortglmer2, 
+                     type = "pred", 
+                     terms = c("Origin[Flat,Slope]"), 
+                     dodge = 1,
+                     title=" ") + 
+  labs(y="Probability of Survival",x="Origin")
+ 
+MortPlot
+
+#ggsave(filename ="Mortality.png", plot=fig) #saves image to working directory
+# as number of observation weeks increase so does the likelihood of fledgelling success
 
 ```
 
@@ -391,6 +467,8 @@ summary(model1)
 #Environmental Data
 ##PAR Stats
 ```{r}
+FieldPAR <- dplyr::rename(FieldPAR, Date = ï..Date)
+
 EnvironmentalSummary(FieldPAR, Locations = list("RSPAR2h", "RFPAR2H"), StartTime = 6, EndTime = 18)
 
 PARStatsData <- as.data.frame(EnvDataStats)
@@ -408,7 +486,6 @@ stepAIC(MeanPARLM)
 Model.Diagnostics(MeanPARLM, anovatype = 3)
 
 
-
 VarPARLM <- lm(InterQR ~ Date * Location, data = PARStatsData, na.action = "na.omit")
 
 stepAIC(VarPARLM)
@@ -416,6 +493,7 @@ stepAIC(VarPARLM)
 Model.Diagnostics(VarPARLM, anovatype = 3)
 
 
+#acf(TempStatsData$Mean , lag.max = 85, plot = TRUE)
 
 ```
 
@@ -458,9 +536,13 @@ PARPlot
 
 ##Temp Stats
 ```{r echo=FALSE}
+
+FieldTemp <- dplyr::rename(FieldTemp, Date = ï..Date)
+
 EnvironmentalSummary(FieldTemp, Locations = list("RSTempH", "RFTempH"), StartTime = 0, EndTime = 24)
 
 TempStatsData <- as.data.frame(EnvDataStats)
+TempStatsData
 TempStatsData$Date <- as.factor(TempStatsData$Date)
 TempStatsData$Date <- as.numeric(TempStatsData$Date)
 
@@ -607,8 +689,7 @@ VolumeOriginPlot2 <- DWPlots(VolLME.auto, "Origin",
 print(list(VolumeOriginPlot, VolumeOriginPlot2, 
            VolumeTransplantPlot, VolumeTransplantPlot2))
 
-
-
+VolumeTransplantPlot$data
 
 ```
 
@@ -634,6 +715,7 @@ SALME.auto <- lme(Pct.SA ~ Origin + Transplant + Pct.Volume,
 Model.Diagnostics(SALME.auto, 2)
 qqnorm(SALME.auto, abline = c(0,1))
 
+
 # increase tissue for fixed increase in  branch volume  (living SA to Volume) is less for corals placed on reef slope, but greater for corals originating from reef slope
 
 ```
@@ -650,19 +732,19 @@ SAOriginPlot <- BarPlots(TRUE, SALME.auto, "Origin",
 
 #Origin dot and whisker plot
 SAOriginPlot2 <- DWPlots(SALME.auto, "Origin", YLimit = c(40,80), 
-                         YLabel = expression("%\U0394 LSA (cm"^"2"*"/cm"^"2"*")"), 
+                         YLabel = expression(paste("%",Delta," LSA (cm"^"2"*"/cm"^"2"*")")), 
                          XLabel = "Origin Locations"
 )
 
 #Transplant bar plot
 SATransplantPlot <- BarPlots(TRUE, SALME.auto, "Transplant", 
-                             Ylabel = expression("%\U0394 LSA (cm"^"2"*"/cm"^"2"*")"), 
+                             Ylabel = expression(paste("%",Delta," LSA (cm"^"2"*"/cm"^"2"*")")), 
                              Xlabel = "Transplant Locations"
 )
 
 #Transplant dot and whisker plot
 SATransplantPlot2 <- DWPlots(SALME.auto, "Transplant", YLimit = c(40,80), 
-                             YLabel = expression(bold("%\U0394 LSA (cm"^"2"*"/cm"^"2"*")")), 
+                             YLabel = expression(bold(paste("%",Delta," LSA (cm"^"2"*"/cm"^"2"*")"))), 
                              XLabel = "Transplant Locations"
 )
 
@@ -673,7 +755,7 @@ print(list(SAOriginPlot, SAOriginPlot2,
 
 
 
-
+SATransplantPlot$data
 
 ```
 #Buoyant Weight
@@ -697,8 +779,10 @@ CalvolLME.auto2 <- lme(Pct.BW ~ Origin * Transplant  + Pct.SA ,
 vif(CalvolLME.auto2) # OK if <5 as standard for collinearity, otherwise drop SA from model, get same effect
 
 #model diagnostics
-Model.Diagnostics(BWvolLME, 3)
+Model.Diagnostics(CalvolLME.auto2, 3)
 qqnorm(CalvolLME.auto2, abline = c(0,1))
+
+summary(CalvolLME.auto2)
 
 #Density increase of branch  (Calcification to Volume for same change in living tissue) is greater for reef flat corals returned to reef flat.
 
@@ -725,16 +809,57 @@ PCTcalplot <- (plot_model(CalvolLME.auto2,
                           show.legend = TRUE,
                           colors = c("blue","red")
 )
-               + ylim(80,140)
                + labs(y="%\U0394 Buoyant Weight (g/g)",x="")
                + theme(
                  axis.text.x = element_blank(),
                  axis.title.x = element_blank()
-               ))
+               )
++ scale_y_continuous(breaks=round(seq(min(80), max(150), by = 15)), 
+                                  limits = c(80,150))
+ + geom_text(label = c("A", "A", "B", "A"), #Group labels from emmeans
+             vjust = c(-4.5, -5.5, -4.5, -6.5),
+             hjust = c(5.7, 5.7 , -4.5, -4.9)
+             )#horizontal adjustment for the group levels
+)
+
 
 PCTcalplot
 
+
+
+PCTcalplot$data
 ```
+###BW SA plot
+
+```{r}
+SABWPlot <- (ggplot(RTData, aes(x = Pct.BW, y = Pct.SA))
+           #  + geom_point()
+             + geom_smooth(method = "lm", colour = "Black")
+             
+             
+             + ylab(expression(bold(paste("%",Delta," LSA (cm"^"2"*"/cm"^"2"*")"))))
+             + xlab(expression(bold(paste("%",  Delta, "Buoyant Weight (g/g)"))))
+             + theme_bw()
+             + theme(
+               panel.grid.major = element_blank(), 
+               panel.grid.minor = element_blank(), 
+               axis.line = element_line(colour = "black"), 
+               axis.text.x = element_text(hjust = 1, size = 12),
+               axis.text.y = element_text(size= 12),
+               axis.title.y = element_text(size = 12),
+               axis.title.x = element_text(size = 12)
+             ) 
+             + scale_x_continuous(breaks=round(seq(min(0), max(250), by = 50)), 
+                                  limits = c(0,250))
+             + scale_y_continuous(breaks=round(seq(min(-50), max(250), by = 75)), 
+                                  limits = c(-50,250))
+)
+
+
+
+SABWPlot
+```
+
 
 
 #Protein
@@ -753,7 +878,7 @@ ProteinLME.auto <-stepAIC(ProteinLME)
 summary(ProteinLME.auto)
 #take forumula for best fit model, and rerun lme, with these predictors and relationships, but this time use method = "REML"
 #eg. IF only location remains, 
-ProteinLME.auto2 <- lme(Pct.Protein ~ Origin * Transplant + Pct.BW +Pct.SA + Pct.Volume,
+ProteinLME.auto2 <- lme(Pct.Protein ~ Origin * Transplant  +Pct.SA,
                         random=~1|Rock, weights = varIdent(form = ~1 | Origin * Transplant), data=RTData, method="REML", na.action = na.exclude)
 #reason is that cannot use stepAIC using REML. See BIOL3023 manual
 
@@ -785,6 +910,20 @@ pairs(emm.s)
 # panel.gridcol = "white"
 # )
 
+
+#Emmeans gives groups based on post hoc
+AcrBWemmeans <- emmeans(ProteinLME.auto2, ~ Origin * Transplant  +Pct.SA)
+
+modify results from least square means for better format
+ BWCLD <- cld(AcrBWemmeans,
+              alpha = 0.05,
+              Letters = letters,
+              adjust = "tukey"
+              )
+
+ #Remove spaces in .group column
+ BWCLD$.group <- gsub(" ", "", BWCLD$.group)
+
 PCTprotplot <- (plot_model(ProteinLME.auto2, 
                            type = "eff",
                            terms = c("Origin", "Transplant"),
@@ -794,13 +933,57 @@ PCTprotplot <- (plot_model(ProteinLME.auto2,
                            axis.textsize = 12,
                            show.legend = FALSE,
                           colors = c("blue","red"))
-                + ylim(40,120)
-                + labs(y= expression(bold("%\U0394 Total Protein (mg/mg)"),x="Origin Locations"))
+                + ylim(40,140)
+                + labs(y= expression(bold(paste("%", Delta, "Total Protein (mg/mg)"),x="Origin Locations")))
+                + scale_y_continuous(breaks=round(seq(min(40), max(140), by = 25)), 
+                                  limits = c(40,140))
+                 + geom_text(label = c("A", "A", "B", "A"), #Group labels from emmeans
+             vjust = c(-4.5, -5.5, -4.5, -6.5),
+             hjust = c(5.7, 5.7 , -4.5, -4.9)
+             )#horizontal adjustment for the group levels
 )
-PCTprotplot
+                
 
+PCTprotplot
+PCTprotplot$data
+
+BWCLD
 
 ```
+###Prot SA plot
+```{r}
+
+SAProtPlot <- (ggplot(RTData, aes(x = Pct.Protein, y = Pct.SA))
+          #   + geom_point()
+             + geom_smooth(method = "lm", colour = "Black")
+             
+             
+             + ylab(expression(paste("%",Delta," LSA (cm"^"2"*"/cm"^"2"*")")))
+             + xlab(expression(bold(paste("%", Delta, "Total Protein (mg/mg)"))))
+             + theme_bw()
+             + theme(
+               panel.grid.major = element_blank(), 
+               panel.grid.minor = element_blank(), 
+               axis.line = element_line(colour = "black"), 
+               axis.text.x = element_text(hjust = 1, size = 12),
+               axis.text.y = element_text(size= 12),
+               axis.title.y = element_text(size = 12),
+               axis.title.x = element_text(size = 12)
+             ) 
+             + scale_x_continuous(breaks=round(seq(min(0), max(250), by = 50)),
+                                  limits = c(0,250))
+             + scale_y_continuous(breaks=round(seq(min(-50), max(250), by = 75)),
+             limits = c(-50,250))
+)
+
+
+
+SABWPlot
+```
+
+
+
+
 #Arrange and save figure 1
 ```{r}
 
@@ -816,24 +999,24 @@ top1 <- ggpubr::ggarrange(TempPlot, PARPlot,
                           align = "v",
                           ncol = 1,
                           heights = c(15,20),
-                          labels = c("c","d"), 
+                          labels = c("a","b"), 
                           label.x = .11,
                           label.y = 0.96
 )
 
-bottom1 <- ggpubr::ggarrange(MortPlot, volplotplot,
+bottom1 <- ggpubr::ggarrange(volplotplot, MortPlot,
                              align = "h",
                              ncol=2,
-                             labels = c(" a","b"), 
-                             label.x = c(.19, .12),
+                             labels = c(" c","d"), 
+                             label.x = c(.10, .19),
                              label.y = 0.9
 )
 bottom1
 
 
-Figure1 <- cowplot::plot_grid(bottom1, top1,
+Figure1 <- cowplot::plot_grid(top1, bottom1,
                               align = "vh",
-                              rel_heights = c(1,1.5),
+                              rel_heights = c(1.5,1),
                               ncol = 1)
 
 Figure1
@@ -841,20 +1024,19 @@ Figure1
 
 
 
-ggsave("Figure1.png", 
+ggsave("Figure3.png", 
        plot = Figure1, 
        path = "Figures", 
        scale = 1, 
        width = 8, 
        height = 8, 
-       units = c("in", "cm", "mm"),
+       units = c("in"),
        dpi = 1000)
 
 
 ```
 
-
-#Arrange and Save Growth Panel graph 
+#Arrange and Save plot 2
 ```{r}
 VolumeTransplantPlot2 <- (VolumeTransplantPlot2
                           + theme(
@@ -915,9 +1097,20 @@ PCTcalplot <- (PCTcalplot
 
 )
 
-PCTprotplot <- (PCTprotplot
+SABWPlot <- (SABWPlot
                 + theme(
                   axis.title.y = element_text(face = "bold"),
+                  axis.title.x = element_text(face = "bold"),
+                            panel.background = element_rect(fill="transparent"),
+                            plot.background = element_rect(fill = "transparent", colour = NA),
+                            panel.grid.major = element_blank(), # get rid of major grid
+                            panel.grid.minor = element_blank()
+                      )
+)
+
+SAProtPlot <- (SAProtPlot
+                + theme(
+                  axis.title.y = element_blank(),
                   axis.title.x = element_text(face = "bold"),
                             panel.background = element_rect(fill="transparent"),
                             plot.background = element_rect(fill = "transparent", colour = NA),
@@ -931,9 +1124,12 @@ PCTprotplot <- (PCTprotplot
 
 top2 <- ggpubr::ggarrange(VolumeTransplantPlot2, VolumeOriginPlot2, 
                           SATransplantPlot2, SAOriginPlot2,
+                          SABWPlot, SAProtPlot,
+                          nrow = 3,
+                          ncol = 2,
                           align = "hv",
-                          labels = c("a","b"," c","d"),
-                          label.x = c(.3,.3,.28,.3),
+                          labels = c("a","b"," c","d","e"," f"),
+                          label.x = c(.2),
                           label.y = .86
 )
 
@@ -942,27 +1138,28 @@ bottom2 <- ggpubr::ggarrange(PCTcalplot, PCTprotplot,
                              heights = c(10,11.5),
                              align = "v",
                              ncol=1,
-                             labels = c("e"," f"),
-                             label.x = .15,
+                             labels = c("g","h"),
+                             label.x = .1,
                              label.y = .85
 )
 
-figure2 <- cowplot::plot_grid(top2, bottom2, 
+figure4 <- cowplot::plot_grid(top2, bottom2, 
                                 align = "hv",
                                 ncol = 1, 
                                 greedy = FALSE)
 
-figure2
+figure4
 
 
-ggsave("Figure2.png",
-       plot = figure2,
+ggsave("Figure4_2.png",
+       plot = figure4,
        path = "Figures",
        scale = 1,
-       width = 5,
-       height = 12,
-       units = c("in", "cm", "mm"),
+       width = 20,
+       height = 35,
+       units = c("cm"),
        dpi = 1000, 
-       bg = "transparent")
+       bg = "white")
+
 
 ```
